@@ -4,6 +4,7 @@ import { EditorToolRail, type EditorToolId } from '../components/editor/editor-t
 import { MediaLibrary, DEFAULT_MEDIA_LIBRARY_FILTERS, type MediaLibraryFilters } from '../components/editor/media-library'
 import { EditPointNavigation } from '../components/editor/edit-point-navigation'
 import { EditorWorkspace } from '../components/editor/editor-workspace'
+import { EditorHeader } from '../components/editor/editor-header'
 import { exportTimeline } from '../editor/export'
 import { activeClipAt, canPlaceOnTrack, editPoints, playheadForSelectedClip, sourceTimeAt, splitClip, stepToEditPoint, timelineEnd, titlesAt, trimClip, visibleAssets, visualLayersAt, visualSettings, type Asset, type Clip, type VisualSettings } from '../editor/model'
 import '../editor/editor.css'
@@ -239,7 +240,16 @@ function Editor(): ReactElement {
   }
 
   return <EditorWorkspace mode="web" theme={theme} preset={preset}
-    header={<header className="oc-editor__header"><strong>OpenCut</strong><span>Untitled project</span><span className="oc-editor__header-spacer" /><select className="oc-editor-theme-picker" aria-label="Editor theme preset" value={preset} onChange={(event) => changePreset(event.currentTarget.value as EditorPreset)}>{PRESETS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select><button type="button" onClick={toggleTheme} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`} title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}>{theme === 'dark' ? '☀' : '☾'}</button>{exportError && <span className="oc-editor__export-error" role="alert">{exportError}</span>}{exporting ? <><span role="status">Exporting {Math.round(exportProgress * 100)}% · keep this tab open</span><button type="button" onClick={() => exportController.current?.abort()}>Cancel</button></> : <button type="button" onClick={() => { void onExport() }} disabled={clips.length === 0} title="Record the timeline locally to WebM at 1280 × 720">Export WebM</button>}</header>}
+    header={<header className="oc-editor__header"><EditorHeader
+      brand="OpenCut"
+      projectName="Untitled project"
+      themeMode={theme}
+      themePreset={preset}
+      themeOptions={PRESETS}
+      onThemeModeToggle={toggleTheme}
+      onThemePresetChange={(next) => changePreset(next as EditorPreset)}
+      actions={<>{exportError && <span className="oc-editor__export-error" role="alert">{exportError}</span>}{exporting ? <><span role="status">Exporting {Math.round(exportProgress * 100)}% · keep this tab open</span><button type="button" onClick={() => exportController.current?.abort()}>Cancel</button></> : <button type="button" onClick={() => { void onExport() }} disabled={clips.length === 0} title="Record the timeline locally to WebM at 1280 × 720">Export WebM</button>}</>}
+    /></header>}
     auxiliary={<input ref={fileInput} type="file" multiple hidden accept={importKind.current === 'video' ? 'video/*' : importKind.current === 'audio' ? 'audio/*' : importKind.current === 'image' ? 'image/*' : 'video/*,audio/*,image/*'} onChange={(event) => { void onFiles(event) }} />}
     left={<><EditorToolRail activeTabId={activeTab} onActiveTabChange={setActiveTab} /><div className="editor-tool-panel" id="editor-tool-panel" role="tabpanel" aria-labelledby={`editor-tool-tab-${activeTab}`}>
         {activeTab === 'media' || activeTab === 'audio' ? <MediaLibrary mode={activeTab} hasProject busy={false} availableCount={activeTab === 'audio' ? assets.filter((asset) => asset.kind === 'audio').length : assets.length} assets={mediaItems} filters={filters} selectedAssetId={selectedAssetId} onFiltersChange={setFilters} onImport={importFiles} onSelect={(assetId) => { setSelectedAssetId(assetId); setSelectedClipId(null) }} onPlace={() => selectedAssetId && placeAsset(selectedAssetId)} onActivateAsset={placeAsset} onAssetDragStart={(event, assetId) => { event.dataTransfer.setData('text/plain', assetId); event.dataTransfer.effectAllowed = 'copy' }} />

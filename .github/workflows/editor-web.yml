@@ -1,0 +1,34 @@
+name: Editor web
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/web/**'
+      - '.github/workflows/editor-web.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/web/**'
+      - '.github/workflows/editor-web.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify-editor:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund --package-lock=false
+      - run: ./node_modules/.bin/tsc --noEmit -p tsconfig.json
+      - run: ./node_modules/.bin/vitest run --config vitest.editor.config.ts
+      - run: npm run build
+        env:
+          XDG_CONFIG_HOME: ${{ runner.temp }}/opencut-xdg

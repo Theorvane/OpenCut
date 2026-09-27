@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent,
 import { EditorToolRail, type EditorToolId } from '../components/editor/editor-tool-rail'
 import { MediaLibrary, DEFAULT_MEDIA_LIBRARY_FILTERS, type MediaLibraryFilters } from '../components/editor/media-library'
 import { EditPointNavigation } from '../components/editor/edit-point-navigation'
-import { editPoints, splitClip, stepToEditPoint, timelineEnd, trimClip, visibleAssets, type Asset, type Clip } from '../editor/model'
+import { canPlaceOnTrack, editPoints, splitClip, stepToEditPoint, timelineEnd, trimClip, visibleAssets, type Asset, type Clip } from '../editor/model'
 import '../editor/editor.css'
 
 export const Route = createFileRoute('/editor')({ component: Editor })
@@ -79,8 +79,7 @@ function Editor(): ReactElement {
     const asset = assets.find((item) => item.id === assetId)
     if (!asset) return
     const track = targetTrack ?? (asset.kind === 'audio' ? 'audio' : 'video')
-    if (track === 'audio' && asset.kind !== 'audio') return
-    if (track === 'video' && asset.kind === 'audio') return
+    if (!canPlaceOnTrack(asset.kind, track)) return
     const clip: Clip = { id: newId(), assetId, start: Math.max(0, at), sourceStart: 0, duration: asset.duration, track }
     setClips((current) => [...current, clip])
     setSelectedClipId(clip.id)
@@ -140,6 +139,23 @@ function Editor(): ReactElement {
     setClips((current) => [...current, clip])
     setSelectedClipId(clip.id)
   }
+  const shortcutActions = useRef({ clipCount: clips.length, playhead, end, seek, remove, split })
+  shortcutActions.current = { clipCount: clips.length, playhead, end, seek, remove, split }
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      const target = event.target
+      if (target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))) return
+      const actions = shortcutActions.current
+      if (event.code === 'Space' && !(target instanceof HTMLButtonElement)) {
+        event.preventDefault()
+        if (actions.clipCount > 0) { if (actions.playhead >= actions.end) actions.seek(0); setPlaying((value) => !value) }
+      } else if (event.key === 'Delete' || event.key === 'Backspace') actions.remove()
+      else if (event.key.toLowerCase() === 's' && !event.metaKey && !event.ctrlKey) actions.split()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [])
+
   const onTrackDrop = (event: DragEvent, track: Clip['track']): void => {
     event.preventDefault()
     const assetId = event.dataTransfer.getData('text/plain')
@@ -148,7 +164,11 @@ function Editor(): ReactElement {
     const rawTime = Math.max(0, (event.clientX - rect.left) / (36 * zoom))
     const nearby = editPoints(clips).find((point) => Math.abs(point - rawTime) < 0.2 / zoom)
     const at = snapping && nearby !== undefined ? nearby : rawTime
-    if (clipId) setClips((current) => current.map((clip) => clip.id === clipId && (track === 'text' ? clip.track === 'text' : clip.track !== 'text') ? { ...clip, track, start: at } : clip))
+    if (clipId) setClips((current) => current.map((clip) => {
+      if (clip.id !== clipId) return clip
+      const asset = assets.find((item) => item.id === clip.assetId)
+      return (clip.track === 'text' ? track === 'text' : asset !== undefined && canPlaceOnTrack(asset.kind, track)) ? { ...clip, track, start: at } : clip
+    }))
     else if (assetId) placeAsset(assetId, at, track)
   }
 

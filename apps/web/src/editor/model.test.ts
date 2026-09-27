@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { splitClip, stepToEditPoint, trimClip, visibleAssets, type Asset, type Clip } from './model'
+import { canPlaceOnTrack, splitClip, stepToEditPoint, trimClip, visibleAssets, type Asset, type Clip } from './model'
 
 const video: Asset = { id: 'v', name: 'Scene A.mp4', kind: 'video', url: '', byteLength: 100, duration: 12 }
 const audio: Asset = { id: 'a', name: 'Voice.mp3', kind: 'audio', url: '', byteLength: 20, duration: 6 }
@@ -23,6 +23,11 @@ describe('editor model', () => {
     const overlapping = { ...clip, id: 'b', start: 4, duration: 3 }
     expect(stepToEditPoint([clip, overlapping], 4, 'next')).toBe(7)
     expect(stepToEditPoint([clip, overlapping], 7, 'previous')).toBe(4)
+  })
+  it('rejects media on incompatible tracks', () => {
+    expect(canPlaceOnTrack('image', 'audio')).toBe(false)
+    expect(canPlaceOnTrack('video', 'video')).toBe(true)
+    expect(canPlaceOnTrack('audio', 'audio')).toBe(true)
   })
   it('filters unused audio while retaining project order', () => {
     expect(visibleAssets([video, audio], [clip], { query: '', sort: 'project', unusedOnly: true }, 'media')).toEqual([audio])

@@ -32,6 +32,10 @@ export function visibleAssets(assets: readonly Asset[], clips: readonly Clip[], 
   }).map(({ asset }) => asset)
 }
 
+export function canPlaceOnTrack(kind: Asset['kind'], track: Clip['track']): boolean {
+  return kind === 'audio' ? track === 'audio' : track === 'video'
+}
+
 export function timelineEnd(clips: readonly Clip[]): number {
   return Math.max(0, ...clips.map((clip) => clip.start + clip.duration))
 }

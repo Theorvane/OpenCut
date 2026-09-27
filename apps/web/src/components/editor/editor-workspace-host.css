@@ -1,0 +1,109 @@
+/* The host supplies editing rules and theme tokens; OpenCut owns the workbench. */
+.oc-editor-host {
+  display: grid;
+  grid-template-areas:
+    "header header header header header"
+    "left leftsplit program inspectsplit inspector"
+    "splitter splitter splitter splitter splitter"
+    "timeline timeline timeline timeline timeline";
+  grid-template-columns: var(--editor-left-dock-width, 320px) var(--space-2, 8px) minmax(0, 1fr) var(--space-2, 8px) var(--editor-inspector-width, 340px);
+  grid-template-rows: 42px minmax(0, var(--editor-program-percent, 58fr)) var(--space-2, 8px) minmax(var(--editor-timeline-min-height, 150px), var(--editor-timeline-percent, 42fr));
+  gap: 4px;
+  box-sizing: border-box;
+  height: 100%;
+  min-height: 0;
+  padding: 4px;
+  overflow: hidden;
+  position: relative;
+  background: var(--surface-inset, #171b22);
+  color: var(--text-strong, #f0f2f6);
+}
+
+.oc-editor-host__header,
+.oc-editor-host__left,
+.oc-editor-host__program,
+.oc-editor-host__inspector,
+.oc-editor-host__timeline {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--border, #323844);
+  border-radius: var(--radius-md, 8px);
+  background: var(--card, #1e232b);
+}
+
+.oc-editor-host__header {
+  grid-area: header;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3, 12px);
+  padding: 0 var(--space-3, 12px);
+  overflow: visible;
+  z-index: 35;
+}
+
+.oc-editor-host__brand { font-size: var(--text-small, 13px); font-weight: 700; white-space: nowrap; }
+.oc-editor-host__project { min-width: 0; overflow: hidden; color: var(--text-weak, #aab3c0); text-overflow: ellipsis; white-space: nowrap; }
+.oc-editor-host__header-spacer { flex: 1; }
+.oc-editor-host__save {
+  padding: 5px 10px;
+  border: 1px solid var(--border-strong, #596171);
+  border-radius: var(--radius-xs, 4px);
+  background: var(--surface-control, #2a303a);
+  color: var(--text-strong, #f0f2f6);
+  cursor: pointer;
+}
+.oc-editor-host__save:disabled { cursor: not-allowed; opacity: .5; }
+.oc-editor-host__save:focus-visible { outline: 2px solid var(--color-primary, #9eb5ff); }
+
+.oc-editor-host__left { grid-area: left; }
+.oc-editor-host__program { grid-area: program; }
+.oc-editor-host__inspector { grid-area: inspector; }
+.oc-editor-host__timeline { grid-area: timeline; }
+.oc-editor-host__left > *,
+.oc-editor-host__program > *,
+.oc-editor-host__inspector > *,
+.oc-editor-host__timeline > * { width: 100%; height: 100%; border: 0; border-radius: 0; box-shadow: none; }
+
+.oc-editor-host--inspector-left {
+  grid-template-areas:
+    "header header header header header"
+    "left leftsplit inspector inspectsplit program"
+    "splitter splitter splitter splitter splitter"
+    "timeline timeline timeline timeline timeline";
+  grid-template-columns: var(--editor-left-dock-width, 320px) var(--space-2, 8px) var(--editor-inspector-width, 340px) var(--space-2, 8px) minmax(0, 1fr);
+}
+.oc-editor-host--inspector-floating,
+.oc-editor-host--inspector-hidden { grid-template-areas: "header header header" "left leftsplit program" "splitter splitter splitter" "timeline timeline timeline"; grid-template-columns: var(--editor-left-dock-width, 320px) var(--space-2, 8px) minmax(0, 1fr); }
+.oc-editor-host--left-hidden.oc-editor-host--inspector-right { grid-template-areas: "header header header" "program inspectsplit inspector" "splitter splitter splitter" "timeline timeline timeline"; grid-template-columns: minmax(0, 1fr) var(--space-2, 8px) var(--editor-inspector-width, 340px); }
+.oc-editor-host--left-hidden.oc-editor-host--inspector-left { grid-template-areas: "header header header" "inspector inspectsplit program" "splitter splitter splitter" "timeline timeline timeline"; grid-template-columns: var(--editor-inspector-width, 340px) var(--space-2, 8px) minmax(0, 1fr); }
+.oc-editor-host--left-hidden.oc-editor-host--inspector-floating,
+.oc-editor-host--left-hidden.oc-editor-host--inspector-hidden { grid-template-areas: "header" "program" "splitter" "timeline"; grid-template-columns: minmax(0, 1fr); }
+.oc-editor-host--left-hidden .oc-editor-host__left,
+.oc-editor-host--inspector-floating .oc-editor-host__inspector,
+.oc-editor-host--inspector-hidden .oc-editor-host__inspector { display: none; }
+
+@container (max-width: 1100px) {
+  .oc-editor-host {
+    grid-template-areas: "header header" "left program" "inspector inspector" "timeline timeline";
+    grid-template-columns: minmax(220px, 32%) minmax(0, 1fr);
+    grid-template-rows: 42px minmax(180px, 1fr) minmax(110px, 140px) minmax(150px, 1fr);
+  }
+  .oc-editor-host--left-hidden { grid-template-areas: "header" "program" "inspector" "timeline"; grid-template-columns: minmax(0, 1fr); }
+  .oc-editor-host--inspector-floating,
+  .oc-editor-host--inspector-hidden { grid-template-areas: "header header" "left program" "timeline timeline"; grid-template-rows: 42px minmax(180px, 1fr) minmax(150px, 1fr); }
+  .oc-editor-host--left-hidden.oc-editor-host--inspector-floating,
+  .oc-editor-host--left-hidden.oc-editor-host--inspector-hidden { grid-template-areas: "header" "program" "timeline"; grid-template-columns: minmax(0, 1fr); }
+  .oc-editor-host > [role="separator"] { display: none; }
+}
+
+@media (max-width: 1120px) {
+  .oc-editor-host { display: flex; flex-direction: column; gap: 4px; overflow: auto; }
+  .oc-editor-host__header { flex: 0 0 42px; }
+  .oc-editor-host__program { flex: 0 0 300px; order: 1; }
+  .oc-editor-host__timeline { flex: 0 0 280px; order: 2; }
+  .oc-editor-host__left { flex: 0 0 230px; order: 3; }
+  .oc-editor-host__inspector { flex: 0 0 230px; order: 4; }
+  .oc-editor-host > .editor-floating-layer { order: 5; }
+  .oc-editor-host > [role="separator"] { display: none; }
+}

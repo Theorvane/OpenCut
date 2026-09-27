@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactElement, ReactNode } from 'react'
+import './editor-workspace-host.css'
 
 type EditorWorkspaceProps = {
   readonly mode: 'web' | 'host'
@@ -40,15 +41,15 @@ export function EditorWorkspace({
   }
 
   return <section className={`oc-editor-host${className ? ` ${className}` : ''}`} style={style} aria-labelledby={labelledBy}>
-    {header}
-    {left}
+    <header className="oc-editor-host__header">{header}</header>
+    <aside className="oc-editor-host__left" aria-label="Editor tools">{left}</aside>
     {leftSplitter}
     {auxiliary}
-    {program}
+    <div className="oc-editor-host__program">{program}</div>
     {programSplitter}
-    {inspector}
+    <aside className="oc-editor-host__inspector" aria-label="Inspector">{inspector}</aside>
     {inspectorSplitter}
     {floatingPanels}
-    {timeline}
+    <section className="oc-editor-host__timeline" aria-label="Timeline">{timeline}</section>
   </section>
 }

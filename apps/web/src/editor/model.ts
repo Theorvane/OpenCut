@@ -55,8 +55,8 @@ export function splitClip(clips: readonly Clip[], id: string, time: number, righ
 }
 
 export function trimClip(clip: Clip, edge: 'left' | 'right', time: number): Clip {
-  if (edge === 'right') return { ...clip, duration: Math.max(0.1, time - clip.start) }
-  const nextStart = Math.min(clip.start + clip.duration - 0.1, Math.max(0, time))
+  if (edge === 'right') return { ...clip, duration: Math.min(clip.duration, Math.max(0.1, time - clip.start)) }
+  const nextStart = Math.min(clip.start + clip.duration - 0.1, Math.max(clip.start, time))
   const delta = nextStart - clip.start
   return { ...clip, start: nextStart, sourceStart: clip.sourceStart + delta, duration: clip.duration - delta }
 }

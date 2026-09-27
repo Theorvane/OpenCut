@@ -21,6 +21,8 @@ type Props = {
   readonly assets: readonly MediaLibraryAsset[]
   readonly filters: MediaLibraryFilters
   readonly filtersActive?: boolean
+  readonly defaultFilters?: MediaLibraryFilters
+  readonly sortOptions?: readonly MediaLibraryFilters['sort'][]
   readonly selectedAssetId: string | null
   readonly onFiltersChange: (filters: MediaLibraryFilters) => void
   readonly onImport: (kind?: 'video' | 'audio' | 'image') => void
@@ -34,7 +36,7 @@ const glyph = { video: '🎬', audio: '🎵', image: '🖼️' }
 const sorts: readonly MediaLibraryFilters['sort'][] = ['project', 'name', 'type', 'duration']
 
 /** Display only. The host supplies its own timeline usage and filter result. */
-export function MediaLibrary({ mode, hasProject, busy, availableCount, assets, filters, filtersActive, selectedAssetId, onFiltersChange, onImport, onSelect, onPlace, onRetry, onAssetDragStart }: Props): ReactElement {
+export function MediaLibrary({ mode, hasProject, busy, availableCount, assets, filters, filtersActive, defaultFilters = DEFAULT_MEDIA_LIBRARY_FILTERS, sortOptions = sorts, selectedAssetId, onFiltersChange, onImport, onSelect, onPlace, onRetry, onAssetDragStart }: Props): ReactElement {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const selected = assets.find((asset) => asset.id === selectedAssetId)
   const activeFilters = filtersActive ?? (filters.query.trim().length > 0 || filters.sort !== 'project' || filters.unusedOnly)
@@ -50,12 +52,12 @@ export function MediaLibrary({ mode, hasProject, busy, availableCount, assets, f
     <div className="asset-bin__find">
       <input type="search" value={filters.query} onChange={(event) => onFiltersChange({ ...filters, query: event.currentTarget.value })} placeholder="Search…" aria-label={audio ? 'Search audio by name' : 'Search media by name'} disabled={!hasProject} />
       <select value={filters.sort} onChange={(event) => onFiltersChange({ ...filters, sort: event.currentTarget.value as MediaLibraryFilters['sort'] })} aria-label="Sort media" disabled={!hasProject}>
-        {sorts.map((sort) => <option key={sort} value={sort}>{sort === 'project' ? 'Original' : sort === 'name' ? 'Name A–Z' : sort === 'type' ? 'Type' : 'Longest'}</option>)}
+        {sortOptions.map((sort) => <option key={sort} value={sort}>{sort === 'project' ? 'Original' : sort === 'name' ? 'Name A–Z' : sort === 'type' ? 'Type' : 'Longest'}</option>)}
       </select>
     </div>
     <div className="asset-bin__filter-row">
       <label className="asset-bin__unused"><input type="checkbox" checked={filters.unusedOnly} onChange={(event) => onFiltersChange({ ...filters, unusedOnly: event.currentTarget.checked })} disabled={!hasProject} />Unused only</label>
-      <button className="button button--ghost asset-bin__reset" type="button" onClick={() => onFiltersChange(DEFAULT_MEDIA_LIBRARY_FILTERS)} disabled={!hasProject || !activeFilters}>Reset</button>
+      <button className="button button--ghost asset-bin__reset" type="button" onClick={() => onFiltersChange(defaultFilters)} disabled={!hasProject || !activeFilters}>Reset</button>
     </div>
     <div className="asset-bin__toolbar">
       {!audio && <button className="button button--ghost asset-bin__toolbar-button" type="button" onClick={() => onImport('video')} disabled={!hasProject || busy}>+ Video</button>}

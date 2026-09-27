@@ -25,8 +25,11 @@ tasks:
     inputs:
       - 'src/**/*'
       - 'tsconfig.json'
+      - 'vitest.editor.config.ts'
 
   deploy:
     command: 'bun run deploy'
     deps:
       - '~:build'
+    options:
+      runInCI: false

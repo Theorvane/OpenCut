@@ -76,3 +76,11 @@ Want your logo here? Reach out at [sponsor@opencut.app](mailto:sponsor@opencut.a
 ## License
 
 [MIT](LICENSE)
+
+## Web editor in the Theorvane fork
+
+The `/editor` route now provides a local browser editing workflow inspired by the archived [OpenCut Classic](https://github.com/OpenCut-app/opencut-classic) layout: media library, program monitor, inspector, and timeline. It supports local video, audio and image import, placement on video/audio tracks, text overlays, playback, clip movement, splitting, trimming, deletion, timeline zoom, and edit-point navigation. Media search, sorting, unused filters, and grid/list views are available in the left dock.
+
+The reusable controls in `apps/web/src/components/editor/` are also consumed by OpenScene through its OpenCut submodule. They accept host data and callbacks. OpenScene keeps its project, timeline, export, and mobile editing rules in its own shared core.
+
+The browser editor currently keeps imported media in memory for the tab session. Reloading the page clears it. It does not yet provide the Classic project's effects, transitions, or export pipeline.

@@ -56,6 +56,19 @@
 .oc-editor-host__save:disabled { cursor: not-allowed; opacity: .5; }
 .oc-editor-host__save:focus-visible { outline: 2px solid var(--color-primary, #9eb5ff); }
 
+.oc-editor-theme-picker {
+  min-width: 0;
+  max-width: 148px;
+  padding: 5px 8px;
+  border: 1px solid var(--border-strong, #596171);
+  border-radius: var(--radius-xs, 4px);
+  background: var(--surface-control, #2a303a);
+  color: var(--text-strong, #f0f2f6);
+  font: inherit;
+  cursor: pointer;
+}
+.oc-editor-theme-picker:focus-visible { outline: 2px solid var(--color-primary, #9eb5ff); }
+
 .oc-editor-host__left { grid-area: left; }
 .oc-editor-host__program { grid-area: program; }
 .oc-editor-host__inspector { grid-area: inspector; }

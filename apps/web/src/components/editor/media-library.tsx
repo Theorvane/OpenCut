@@ -28,6 +28,7 @@ type Props = {
   readonly onImport: (kind?: 'video' | 'audio' | 'image') => void
   readonly onSelect: (assetId: string) => void
   readonly onPlace: () => void
+  readonly onActivateAsset?: (assetId: string) => void
   readonly onRetry?: (assetId: string) => void
   readonly onAssetDragStart?: (event: DragEvent, assetId: string) => void
 }
@@ -36,7 +37,7 @@ const glyph = { video: '🎬', audio: '🎵', image: '🖼️' }
 const sorts: readonly MediaLibraryFilters['sort'][] = ['project', 'name', 'type', 'duration']
 
 /** Display only. The host supplies its own timeline usage and filter result. */
-export function MediaLibrary({ mode, hasProject, busy, availableCount, assets, filters, filtersActive, defaultFilters = DEFAULT_MEDIA_LIBRARY_FILTERS, sortOptions = sorts, selectedAssetId, onFiltersChange, onImport, onSelect, onPlace, onRetry, onAssetDragStart }: Props): ReactElement {
+export function MediaLibrary({ mode, hasProject, busy, availableCount, assets, filters, filtersActive, defaultFilters = DEFAULT_MEDIA_LIBRARY_FILTERS, sortOptions = sorts, selectedAssetId, onFiltersChange, onImport, onSelect, onPlace, onActivateAsset, onRetry, onAssetDragStart }: Props): ReactElement {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const selected = assets.find((asset) => asset.id === selectedAssetId)
   const activeFilters = filtersActive ?? (filters.query.trim().length > 0 || filters.sort !== 'project' || filters.unusedOnly)
@@ -70,10 +71,10 @@ export function MediaLibrary({ mode, hasProject, busy, availableCount, assets, f
       : assets.length === 0 ? <div className="empty-slate">No {audio ? 'audio' : 'media'} matches the current filters.</div>
       : <div className={`asset-grid ${viewMode === 'grid' ? 'asset-grid--tiles' : 'asset-grid--list'}`} aria-label="Imported project assets">
         {assets.map((asset) => <div key={asset.id} className="asset-tile-entry">
-          {viewMode === 'grid' ? <button className={`asset-tile${asset.id === selectedAssetId ? ' asset-tile--selected' : ''}`} draggable={asset.ready && !!onAssetDragStart} type="button" onClick={() => onSelect(asset.id)} onDragStart={(event) => onAssetDragStart?.(event, asset.id)} title={asset.displayName}>
+          {viewMode === 'grid' ? <button className={`asset-tile${asset.id === selectedAssetId ? ' asset-tile--selected' : ''}`} draggable={asset.ready && !!onAssetDragStart} type="button" onClick={() => onSelect(asset.id)} onDoubleClick={() => { if (asset.ready) onActivateAsset?.(asset.id) }} onDragStart={(event) => onAssetDragStart?.(event, asset.id)} title={asset.ready && onActivateAsset ? `${asset.displayName} · Double-click to add to timeline` : asset.displayName}>
             <span className={`asset-tile__preview asset-tile__preview--${asset.kind}`} aria-hidden="true"><span className="asset-tile__glyph">{glyph[asset.kind]}</span><span className={`asset-tile__kind asset-card__kind asset-card__kind--${asset.kind}`}>{asset.kind}</span><span className="asset-tile__duration">{asset.durationLabel}</span></span>
             <strong className="asset-tile__name">{asset.displayName}</strong><small className="asset-tile__meta">{asset.byteLabel} · {asset.usageCount} on timeline</small>
-          </button> : <button className={`asset-row${asset.id === selectedAssetId ? ' asset-row--selected' : ''}`} draggable={asset.ready && !!onAssetDragStart} type="button" onClick={() => onSelect(asset.id)} onDragStart={(event) => onAssetDragStart?.(event, asset.id)} title={asset.displayName}>
+          </button> : <button className={`asset-row${asset.id === selectedAssetId ? ' asset-row--selected' : ''}`} draggable={asset.ready && !!onAssetDragStart} type="button" onClick={() => onSelect(asset.id)} onDoubleClick={() => { if (asset.ready) onActivateAsset?.(asset.id) }} onDragStart={(event) => onAssetDragStart?.(event, asset.id)} title={asset.ready && onActivateAsset ? `${asset.displayName} · Double-click to add to timeline` : asset.displayName}>
             <span className={`asset-row__thumb asset-row__thumb--${asset.kind}`} aria-hidden="true">{glyph[asset.kind]}</span><span className="asset-row__body"><strong className="asset-row__name">{asset.displayName}</strong><small className="asset-row__meta">{asset.kind} · {asset.byteLabel} · {asset.usageCount} on timeline</small></span><span className="asset-row__duration">{asset.durationLabel}</span>
           </button>}
           {asset.id === selectedAssetId && asset.failureMessage !== undefined && onRetry && <button className="button asset-bin__retry" type="button" onClick={() => onRetry(asset.id)}>Retry metadata</button>}

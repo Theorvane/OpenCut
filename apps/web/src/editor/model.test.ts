@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { activeClipAt, canPlaceOnTrack, sourceTimeAt, splitClip, stepToEditPoint, timelineEnd, titlesAt, trimClip, visibleAssets, visualLayersAt, visualSettings, type Asset, type Clip } from './model'
+import { activeClipAt, canPlaceOnTrack, playheadForSelectedClip, sourceTimeAt, splitClip, stepToEditPoint, timelineEnd, titlesAt, trimClip, visibleAssets, visualLayersAt, visualSettings, type Asset, type Clip } from './model'
 import { supportedWebMType, validateExport } from './export'
 
 const video: Asset = { id: 'v', name: 'Scene A.mp4', kind: 'video', url: '', byteLength: 100, duration: 12 }
@@ -7,6 +7,11 @@ const audio: Asset = { id: 'a', name: 'Voice.mp3', kind: 'audio', url: '', byteL
 const clip: Clip = { id: 'c', assetId: 'v', track: 'video', start: 2, sourceStart: 1, duration: 8 }
 
 describe('editor model', () => {
+  it('reveals a selected clip without moving the playhead when already inside it', () => {
+    expect(playheadForSelectedClip(clip, 0)).toBe(2)
+    expect(playheadForSelectedClip(clip, 5)).toBe(5)
+    expect(playheadForSelectedClip(clip, 10)).toBe(2)
+  })
   it('splits a clip without changing its source span', () => {
     expect(splitClip([clip], 'c', 5, 'right')).toEqual([
       { ...clip, duration: 3 },

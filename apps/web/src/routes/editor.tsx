@@ -3,7 +3,8 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent,
 import { EditorToolRail, type EditorToolId } from '../components/editor/editor-tool-rail'
 import { MediaLibrary, DEFAULT_MEDIA_LIBRARY_FILTERS, type MediaLibraryFilters } from '../components/editor/media-library'
 import { EditPointNavigation } from '../components/editor/edit-point-navigation'
-import { canPlaceOnTrack, editPoints, splitClip, stepToEditPoint, timelineEnd, trimClip, visibleAssets, type Asset, type Clip } from '../editor/model'
+import { exportTimeline } from '../editor/export'
+import { activeClipAt, canPlaceOnTrack, editPoints, sourceTimeAt, splitClip, stepToEditPoint, timelineEnd, titlesAt, trimClip, visibleAssets, type Asset, type Clip } from '../editor/model'
 import '../editor/editor.css'
 
 export const Route = createFileRoute('/editor')({ component: Editor })
@@ -41,26 +42,54 @@ function Editor(): ReactElement {
   const [playing, setPlaying] = useState(false)
   const [zoom, setZoom] = useState(1)
   const [snapping, setSnapping] = useState(true)
+  const [exporting, setExporting] = useState(false)
+  const [exportProgress, setExportProgress] = useState(0)
+  const [exportError, setExportError] = useState<string | null>(null)
+  const exportController = useRef<AbortController | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
   const importKind = useRef<'video' | 'audio' | 'image' | undefined>(undefined)
   const videoRef = useRef<HTMLVideoElement>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
   const clockRef = useRef({ time: 0, at: 0 })
   const objectUrls = useRef<string[]>([])
-  useEffect(() => () => { objectUrls.current.forEach((url) => URL.revokeObjectURL(url)) }, [])
+  useEffect(() => () => { exportController.current?.abort(); objectUrls.current.forEach((url) => URL.revokeObjectURL(url)) }, [])
 
   const end = timelineEnd(clips)
   const duration = Math.max(10, Math.ceil(end + 2))
   const selectedClip = clips.find((clip) => clip.id === selectedClipId) ?? null
   const selectedAsset = assets.find((asset) => asset.id === selectedAssetId) ?? null
-  const currentVideo = [...clips].reverse().find((clip) => clip.track === 'video' && playhead >= clip.start && playhead < clip.start + clip.duration) ?? null
-  const currentAudio = [...clips].reverse().find((clip) => clip.track === 'audio' && playhead >= clip.start && playhead < clip.start + clip.duration) ?? null
+  const currentVideo = activeClipAt(clips, 'video', playhead)
+  const currentAudio = activeClipAt(clips, 'audio', playhead)
   const videoAsset = assets.find((asset) => asset.id === currentVideo?.assetId)
   const audioAsset = assets.find((asset) => asset.id === currentAudio?.assetId)
   const filteredAssets = useMemo(() => visibleAssets(assets, clips, activeTab === 'audio' ? audioFilters : mediaFilters, activeTab === 'audio' ? 'audio' : 'media'), [assets, clips, activeTab, audioFilters, mediaFilters])
   const filters = activeTab === 'audio' ? audioFilters : mediaFilters
   const setFilters = activeTab === 'audio' ? setAudioFilters : setMediaFilters
   const mediaItems = filteredAssets.map((asset) => ({ id: asset.id, displayName: asset.name, kind: asset.kind, byteLabel: bytes(asset.byteLength), durationLabel: asset.kind === 'image' ? 'Still image' : formatTime(asset.duration), usageCount: clips.filter((clip) => clip.assetId === asset.id).length, ready: true }))
+
+  const onExport = async (): Promise<void> => {
+    if (exporting) return
+    const controller = new AbortController()
+    exportController.current = controller
+    setPlaying(false)
+    setExportError(null)
+    setExportProgress(0)
+    setExporting(true)
+    try {
+      const blob = await exportTimeline({ assets, clips, signal: controller.signal, onProgress: setExportProgress })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `opencut-${new Date().toISOString().slice(0, 10)}.webm`
+      link.click()
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : 'Could not export the timeline.')
+    } finally {
+      exportController.current = null
+      setExporting(false)
+    }
+  }
 
   const importFiles = (kind?: 'video' | 'audio' | 'image'): void => {
     importKind.current = kind
@@ -107,7 +136,7 @@ function Editor(): ReactElement {
   useEffect(() => {
     const video = videoRef.current
     if (!video || !currentVideo || videoAsset?.kind !== 'video') return
-    const desired = currentVideo.sourceStart + playhead - currentVideo.start
+    const desired = sourceTimeAt(currentVideo, playhead)
     if (Math.abs(video.currentTime - desired) > 0.3) video.currentTime = desired
     if (playing) void video.play().catch(() => setPlaying(false))
     else video.pause()
@@ -115,7 +144,7 @@ function Editor(): ReactElement {
   useEffect(() => {
     const audio = audioRef.current
     if (!audio || !currentAudio) return
-    const desired = currentAudio.sourceStart + playhead - currentAudio.start
+    const desired = sourceTimeAt(currentAudio, playhead)
     if (Math.abs(audio.currentTime - desired) > 0.3) audio.currentTime = desired
     if (playing) void audio.play().catch(() => setPlaying(false))
     else audio.pause()
@@ -173,7 +202,7 @@ function Editor(): ReactElement {
   }
 
   return <main className="oc-editor">
-    <header className="oc-editor__header"><strong>OpenCut</strong><span>Untitled project</span><span className="oc-editor__header-spacer" /><span>Local browser editor</span></header>
+    <header className="oc-editor__header"><strong>OpenCut</strong><span>Untitled project</span><span className="oc-editor__header-spacer" />{exportError && <span className="oc-editor__export-error" role="alert">{exportError}</span>}{exporting ? <><span role="status">Exporting {Math.round(exportProgress * 100)}% · keep this tab open</span><button type="button" onClick={() => exportController.current?.abort()}>Cancel</button></> : <button type="button" onClick={() => { void onExport() }} disabled={clips.length === 0} title="Record the timeline locally to WebM at 1280 × 720">Export WebM</button>}</header>
     <input ref={fileInput} type="file" multiple hidden accept={importKind.current === 'video' ? 'video/*' : importKind.current === 'audio' ? 'audio/*' : importKind.current === 'image' ? 'image/*' : 'video/*,audio/*,image/*'} onChange={(event) => { void onFiles(event) }} />
     <div className="oc-editor__main">
       <aside className="oc-editor__left"><EditorToolRail activeTabId={activeTab} onActiveTabChange={setActiveTab} /><div className="editor-tool-panel" id="editor-tool-panel" role="tabpanel" aria-labelledby={`editor-tool-tab-${activeTab}`}>
@@ -184,7 +213,7 @@ function Editor(): ReactElement {
       <section className="oc-editor__preview" aria-label="Program monitor"><div className="oc-editor__stage">
         {currentVideo?.track === 'text' ? null : videoAsset?.kind === 'video' ? <video ref={videoRef} key={currentVideo?.id} src={videoAsset.url} playsInline /> : videoAsset?.kind === 'image' ? <img src={videoAsset.url} alt="Timeline still" /> : <div className="oc-editor__stage-empty">Import media, then place it on the timeline</div>}
         {audioAsset && <audio ref={audioRef} key={currentAudio?.id} src={audioAsset.url} />}
-        {clips.filter((clip) => clip.track === 'text' && playhead >= clip.start && playhead < clip.start + clip.duration).map((clip) => <div className="oc-editor__title" key={clip.id}>{clip.text}</div>)}
+        {titlesAt(clips, playhead).map((clip) => <div className="oc-editor__title" key={clip.id}>{clip.text}</div>)}
       </div><div className="oc-editor__transport"><button type="button" onClick={() => { if (playhead >= end) seek(0); setPlaying((value) => !value) }} disabled={clips.length === 0}>{playing ? 'Pause' : 'Play'}</button><span>{formatTime(playhead)} / {formatTime(end)}</span></div></section>
       <aside className="oc-editor__inspector"><h2>Inspector</h2>{selectedClip ? <><label>Start <input type="number" min="0" step="0.1" value={selectedClip.start.toFixed(1)} onChange={(event) => changeClip({ start: Math.max(0, Number(event.target.value)) })} /></label><label>Duration <input type="number" min="0.1" step="0.1" value={selectedClip.duration.toFixed(1)} onChange={(event) => changeClip({ duration: Math.max(0.1, Number(event.target.value)) })} /></label>{selectedClip.track === 'text' && <label>Text <input value={selectedClip.text ?? ''} onChange={(event) => changeClip({ text: event.target.value })} /></label>}<button type="button" onClick={() => setClips((current) => current.map((clip) => clip.id === selectedClip.id ? trimClip(clip, 'left', playhead) : clip))}>Trim left to playhead</button><button type="button" onClick={() => setClips((current) => current.map((clip) => clip.id === selectedClip.id ? trimClip(clip, 'right', playhead) : clip))}>Trim right to playhead</button></> : selectedAsset ? <><strong>{selectedAsset.name}</strong><span>{selectedAsset.kind} · {bytes(selectedAsset.byteLength)}</span><span>{formatTime(selectedAsset.duration)}</span></> : <p>Select a clip or media item.</p>}</aside>
     </div>

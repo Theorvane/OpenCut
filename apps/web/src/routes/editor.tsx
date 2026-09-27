@@ -32,6 +32,20 @@ async function readFile(file: File): Promise<Asset> {
 }
 
 function Editor(): ReactElement {
+  const [theme, setTheme] = useState<'light' | 'dark'>('dark')
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem('opencut-editor-theme')
+      setTheme(saved === 'light' || saved === 'dark' ? saved : window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+    } catch {
+      setTheme(window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+    }
+  }, [])
+  const toggleTheme = (): void => {
+    const next = theme === 'dark' ? 'light' : 'dark'
+    setTheme(next)
+    try { window.localStorage.setItem('opencut-editor-theme', next) } catch { /* Browser storage may be unavailable. */ }
+  }
   const [assets, setAssets] = useState<Asset[]>([])
   const [clips, setClips] = useState<Clip[]>([])
   const [activeTab, setActiveTab] = useState<EditorToolId>('media')
@@ -208,8 +222,8 @@ function Editor(): ReactElement {
     else if (assetId) placeAsset(assetId, at, track)
   }
 
-  return <EditorWorkspace mode="web"
-    header={<header className="oc-editor__header"><strong>OpenCut</strong><span>Untitled project</span><span className="oc-editor__header-spacer" />{exportError && <span className="oc-editor__export-error" role="alert">{exportError}</span>}{exporting ? <><span role="status">Exporting {Math.round(exportProgress * 100)}% · keep this tab open</span><button type="button" onClick={() => exportController.current?.abort()}>Cancel</button></> : <button type="button" onClick={() => { void onExport() }} disabled={clips.length === 0} title="Record the timeline locally to WebM at 1280 × 720">Export WebM</button>}</header>}
+  return <EditorWorkspace mode="web" theme={theme}
+    header={<header className="oc-editor__header"><strong>OpenCut</strong><span>Untitled project</span><span className="oc-editor__header-spacer" /><button type="button" onClick={toggleTheme} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`} title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}>{theme === 'dark' ? '☀' : '☾'}</button>{exportError && <span className="oc-editor__export-error" role="alert">{exportError}</span>}{exporting ? <><span role="status">Exporting {Math.round(exportProgress * 100)}% · keep this tab open</span><button type="button" onClick={() => exportController.current?.abort()}>Cancel</button></> : <button type="button" onClick={() => { void onExport() }} disabled={clips.length === 0} title="Record the timeline locally to WebM at 1280 × 720">Export WebM</button>}</header>}
     auxiliary={<input ref={fileInput} type="file" multiple hidden accept={importKind.current === 'video' ? 'video/*' : importKind.current === 'audio' ? 'audio/*' : importKind.current === 'image' ? 'image/*' : 'video/*,audio/*,image/*'} onChange={(event) => { void onFiles(event) }} />}
     left={<><EditorToolRail activeTabId={activeTab} onActiveTabChange={setActiveTab} /><div className="editor-tool-panel" id="editor-tool-panel" role="tabpanel" aria-labelledby={`editor-tool-tab-${activeTab}`}>
         {activeTab === 'media' || activeTab === 'audio' ? <MediaLibrary mode={activeTab} hasProject busy={false} availableCount={activeTab === 'audio' ? assets.filter((asset) => asset.kind === 'audio').length : assets.length} assets={mediaItems} filters={filters} selectedAssetId={selectedAssetId} onFiltersChange={setFilters} onImport={importFiles} onSelect={setSelectedAssetId} onPlace={() => selectedAssetId && placeAsset(selectedAssetId)} onAssetDragStart={(event, assetId) => { event.dataTransfer.setData('text/plain', assetId); event.dataTransfer.effectAllowed = 'copy' }} />

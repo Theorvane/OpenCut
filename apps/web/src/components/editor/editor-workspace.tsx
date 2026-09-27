@@ -3,6 +3,7 @@ import './editor-workspace-host.css'
 
 type EditorWorkspaceProps = {
   readonly mode: 'web' | 'host'
+  readonly theme?: 'light' | 'dark'
   readonly className?: string
   readonly style?: CSSProperties
   readonly labelledBy?: string
@@ -24,11 +25,11 @@ type EditorWorkspaceProps = {
  * local file URLs, or export logic into those hosts.
  */
 export function EditorWorkspace({
-  mode, className, style, labelledBy, header, auxiliary, left, leftSplitter,
+  mode, theme, className, style, labelledBy, header, auxiliary, left, leftSplitter,
   program, programSplitter, inspector, inspectorSplitter, floatingPanels, timeline
 }: EditorWorkspaceProps): ReactElement {
   if (mode === 'web') {
-    return <main className={`oc-editor${className ? ` ${className}` : ''}`} style={style} aria-labelledby={labelledBy}>
+    return <main className={`oc-editor${className ? ` ${className}` : ''}`} data-theme={theme} style={style} aria-labelledby={labelledBy}>
       {header}
       {auxiliary}
       <div className="oc-editor__main">

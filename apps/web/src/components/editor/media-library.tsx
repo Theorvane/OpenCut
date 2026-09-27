@@ -20,6 +20,7 @@ type Props = {
   readonly availableCount: number
   readonly assets: readonly MediaLibraryAsset[]
   readonly filters: MediaLibraryFilters
+  readonly filtersActive?: boolean
   readonly selectedAssetId: string | null
   readonly onFiltersChange: (filters: MediaLibraryFilters) => void
   readonly onImport: (kind?: 'video' | 'audio' | 'image') => void
@@ -33,10 +34,10 @@ const glyph = { video: '🎬', audio: '🎵', image: '🖼️' }
 const sorts: readonly MediaLibraryFilters['sort'][] = ['project', 'name', 'type', 'duration']
 
 /** Display only. The host supplies its own timeline usage and filter result. */
-export function MediaLibrary({ mode, hasProject, busy, availableCount, assets, filters, selectedAssetId, onFiltersChange, onImport, onSelect, onPlace, onRetry, onAssetDragStart }: Props): ReactElement {
+export function MediaLibrary({ mode, hasProject, busy, availableCount, assets, filters, filtersActive, selectedAssetId, onFiltersChange, onImport, onSelect, onPlace, onRetry, onAssetDragStart }: Props): ReactElement {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const selected = assets.find((asset) => asset.id === selectedAssetId)
-  const activeFilters = filters.query.trim().length > 0 || filters.sort !== 'project' || filters.unusedOnly
+  const activeFilters = filtersActive ?? (filters.query.trim().length > 0 || filters.sort !== 'project' || filters.unusedOnly)
   const audio = mode === 'audio'
   return <section className="asset-bin" aria-labelledby="assets-title" style={{ gap: 'var(--space-2)', padding: 'var(--space-3)' }}>
     <div className="panel-heading asset-bin__header">

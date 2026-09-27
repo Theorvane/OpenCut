@@ -4,7 +4,7 @@ import { EditorToolRail, type EditorToolId } from '../components/editor/editor-t
 import { MediaLibrary, DEFAULT_MEDIA_LIBRARY_FILTERS, type MediaLibraryFilters } from '../components/editor/media-library'
 import { EditPointNavigation } from '../components/editor/edit-point-navigation'
 import { exportTimeline } from '../editor/export'
-import { activeClipAt, canPlaceOnTrack, editPoints, sourceTimeAt, splitClip, stepToEditPoint, timelineEnd, titlesAt, trimClip, visibleAssets, type Asset, type Clip } from '../editor/model'
+import { activeClipAt, canPlaceOnTrack, editPoints, sourceTimeAt, splitClip, stepToEditPoint, timelineEnd, titlesAt, trimClip, visibleAssets, visualLayersAt, visualSettings, type Asset, type Clip, type VisualSettings } from '../editor/model'
 import '../editor/editor.css'
 
 export const Route = createFileRoute('/editor')({ component: Editor })
@@ -48,7 +48,7 @@ function Editor(): ReactElement {
   const exportController = useRef<AbortController | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
   const importKind = useRef<'video' | 'audio' | 'image' | undefined>(undefined)
-  const videoRef = useRef<HTMLVideoElement>(null)
+  const videoRefs = useRef(new Map<string, HTMLVideoElement>())
   const audioRef = useRef<HTMLAudioElement>(null)
   const clockRef = useRef({ time: 0, at: 0 })
   const objectUrls = useRef<string[]>([])
@@ -58,9 +58,8 @@ function Editor(): ReactElement {
   const duration = Math.max(10, Math.ceil(end + 2))
   const selectedClip = clips.find((clip) => clip.id === selectedClipId) ?? null
   const selectedAsset = assets.find((asset) => asset.id === selectedAssetId) ?? null
-  const currentVideo = activeClipAt(clips, 'video', playhead)
+  const visualLayers = visualLayersAt(clips, playhead)
   const currentAudio = activeClipAt(clips, 'audio', playhead)
-  const videoAsset = assets.find((asset) => asset.id === currentVideo?.assetId)
   const audioAsset = assets.find((asset) => asset.id === currentAudio?.assetId)
   const filteredAssets = useMemo(() => visibleAssets(assets, clips, activeTab === 'audio' ? audioFilters : mediaFilters, activeTab === 'audio' ? 'audio' : 'media'), [assets, clips, activeTab, audioFilters, mediaFilters])
   const filters = activeTab === 'audio' ? audioFilters : mediaFilters
@@ -134,13 +133,16 @@ function Editor(): ReactElement {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing, end])
   useEffect(() => {
-    const video = videoRef.current
-    if (!video || !currentVideo || videoAsset?.kind !== 'video') return
-    const desired = sourceTimeAt(currentVideo, playhead)
-    if (Math.abs(video.currentTime - desired) > 0.3) video.currentTime = desired
-    if (playing) void video.play().catch(() => setPlaying(false))
-    else video.pause()
-  }, [playhead, playing, currentVideo, videoAsset])
+    for (const layer of visualLayers) {
+      const video = videoRefs.current.get(layer.clip.id)
+      if (!video) continue
+      const desired = sourceTimeAt(layer.clip, playhead)
+      if (Math.abs(video.currentTime - desired) > 0.3) video.currentTime = desired
+      video.volume = layer.audioGain
+      if (playing) void video.play().catch(() => setPlaying(false))
+      else video.pause()
+    }
+  }, [playhead, playing, visualLayers])
   useEffect(() => {
     const audio = audioRef.current
     if (!audio || !currentAudio) return
@@ -153,6 +155,10 @@ function Editor(): ReactElement {
   const changeClip = (patch: Partial<Clip>): void => {
     if (!selectedClipId) return
     setClips((current) => current.map((clip) => clip.id === selectedClipId ? { ...clip, ...patch } : clip))
+  }
+  const changeVisual = (key: keyof VisualSettings, value: number): void => {
+    if (!selectedClip || selectedClip.track !== 'video') return
+    changeClip({ visual: { ...visualSettings(selectedClip), [key]: value } })
   }
   const split = (): void => {
     if (!selectedClipId) return
@@ -211,12 +217,44 @@ function Editor(): ReactElement {
           : <div className="oc-editor__pane"><h2>Project</h2><p>Media: {assets.length}</p><p>Timeline clips: {clips.length}</p><button type="button" onClick={() => importFiles()}>Import media</button></div>}
       </div></aside>
       <section className="oc-editor__preview" aria-label="Program monitor"><div className="oc-editor__stage">
-        {currentVideo?.track === 'text' ? null : videoAsset?.kind === 'video' ? <video ref={videoRef} key={currentVideo?.id} src={videoAsset.url} playsInline /> : videoAsset?.kind === 'image' ? <img src={videoAsset.url} alt="Timeline still" /> : <div className="oc-editor__stage-empty">Import media, then place it on the timeline</div>}
+        {visualLayers.length === 0 && <div className="oc-editor__stage-empty">Import media, then place it on the timeline</div>}
+        {visualLayers.map((layer) => {
+          const asset = assets.find((item) => item.id === layer.clip.assetId)
+          const style = { opacity: layer.opacity, filter: layer.filter }
+          return asset?.kind === 'video' ? <video ref={(element) => { if (element) videoRefs.current.set(layer.clip.id, element); else videoRefs.current.delete(layer.clip.id) }} key={layer.clip.id} src={asset.url} style={style} playsInline />
+            : asset?.kind === 'image' ? <img key={layer.clip.id} src={asset.url} style={style} alt="Timeline still" /> : null
+        })}
         {audioAsset && <audio ref={audioRef} key={currentAudio?.id} src={audioAsset.url} />}
         {titlesAt(clips, playhead).map((clip) => <div className="oc-editor__title" key={clip.id}>{clip.text}</div>)}
       </div><div className="oc-editor__transport"><button type="button" onClick={() => { if (playhead >= end) seek(0); setPlaying((value) => !value) }} disabled={clips.length === 0}>{playing ? 'Pause' : 'Play'}</button><span>{formatTime(playhead)} / {formatTime(end)}</span></div></section>
-      <aside className="oc-editor__inspector"><h2>Inspector</h2>{selectedClip ? <><label>Start <input type="number" min="0" step="0.1" value={selectedClip.start.toFixed(1)} onChange={(event) => changeClip({ start: Math.max(0, Number(event.target.value)) })} /></label><label>Duration <input type="number" min="0.1" step="0.1" value={selectedClip.duration.toFixed(1)} onChange={(event) => changeClip({ duration: Math.max(0.1, Number(event.target.value)) })} /></label>{selectedClip.track === 'text' && <label>Text <input value={selectedClip.text ?? ''} onChange={(event) => changeClip({ text: event.target.value })} /></label>}<button type="button" onClick={() => setClips((current) => current.map((clip) => clip.id === selectedClip.id ? trimClip(clip, 'left', playhead) : clip))}>Trim left to playhead</button><button type="button" onClick={() => setClips((current) => current.map((clip) => clip.id === selectedClip.id ? trimClip(clip, 'right', playhead) : clip))}>Trim right to playhead</button></> : selectedAsset ? <><strong>{selectedAsset.name}</strong><span>{selectedAsset.kind} · {bytes(selectedAsset.byteLength)}</span><span>{formatTime(selectedAsset.duration)}</span></> : <p>Select a clip or media item.</p>}</aside>
+      <aside className="oc-editor__inspector"><h2>Inspector</h2>{selectedClip ? <>
+        <label>Start <input type="number" min="0" step="0.1" value={selectedClip.start.toFixed(1)} onChange={(event) => changeClip({ start: Math.max(0, Number(event.target.value)) })} /></label>
+        <label>Duration <input type="number" min="0.1" step="0.1" value={selectedClip.duration.toFixed(1)} onChange={(event) => changeClip({ duration: Math.max(0.1, Number(event.target.value)) })} /></label>
+        {selectedClip.track === 'text' && <label>Text <input value={selectedClip.text ?? ''} onChange={(event) => changeClip({ text: event.target.value })} /></label>}
+        {selectedClip.track === 'video' && <VisualInspector clip={selectedClip} onChange={changeVisual} />}
+        <button type="button" onClick={() => setClips((current) => current.map((clip) => clip.id === selectedClip.id ? trimClip(clip, 'left', playhead) : clip))}>Trim left to playhead</button>
+        <button type="button" onClick={() => setClips((current) => current.map((clip) => clip.id === selectedClip.id ? trimClip(clip, 'right', playhead) : clip))}>Trim right to playhead</button>
+      </> : selectedAsset ? <><strong>{selectedAsset.name}</strong><span>{selectedAsset.kind} · {bytes(selectedAsset.byteLength)}</span><span>{formatTime(selectedAsset.duration)}</span></> : <p>Select a clip or media item.</p>}</aside>
     </div>
     <section className="oc-editor__timeline" aria-label="Timeline"><div className="oc-editor__timeline-toolbar"><button type="button" onClick={split} disabled={!selectedClip || playhead <= selectedClip.start || playhead >= selectedClip.start + selectedClip.duration}>Split</button><button type="button" onClick={remove} disabled={!selectedClip}>Delete</button><EditPointNavigation disabled={clips.length === 0} onPrevious={() => seek(stepToEditPoint(clips, playhead, 'previous'))} onNext={() => seek(stepToEditPoint(clips, playhead, 'next'))} /><button type="button" aria-pressed={snapping} title="Snap to edit points" onClick={() => setSnapping((value) => !value)}>{snapping ? 'Snap on' : 'Snap off'}</button><span className="oc-editor__toolbar-spacer" /><button type="button" onClick={() => setZoom((value) => Math.max(0.5, value / 1.25))}>−</button><span>{Math.round(zoom * 100)}%</span><button type="button" onClick={() => setZoom((value) => Math.min(5, value * 1.25))}>+</button></div><div className="oc-editor__timeline-scroll"><div className="oc-editor__track-labels"><div>Time</div><div>Text</div><div>Video</div><div>Audio</div></div><div className="oc-editor__timeline-content" style={{ width: `${duration * 36 * zoom}px` }}><div className="oc-editor__ruler" onClick={(event) => { const rect = event.currentTarget.getBoundingClientRect(); seek((event.clientX - rect.left) / (36 * zoom)) }}>{Array.from({ length: Math.ceil(duration / 5) + 1 }, (_, i) => <span key={i} style={{ left: `${i * 5 * 36 * zoom}px` }}>{i * 5}s</span>)}</div>{(['text', 'video', 'audio'] as const).map((track) => <div key={track} className="oc-editor__track" onDragOver={(event) => event.preventDefault()} onDrop={(event) => onTrackDrop(event, track)}>{clips.filter((clip) => clip.track === track).map((clip) => <button key={clip.id} type="button" draggable onDragStart={(event) => { event.dataTransfer.setData('application/x-opencut-clip', clip.id); event.dataTransfer.effectAllowed = 'move' }} className={`oc-editor__clip oc-editor__clip--${track}${selectedClipId === clip.id ? ' oc-editor__clip--selected' : ''}`} style={{ left: `${clip.start * 36 * zoom}px`, width: `${Math.max(clip.duration * 36 * zoom, 28)}px` }} onClick={() => { setSelectedClipId(clip.id); seek(clip.start) }} title={`${clip.text ?? assets.find((asset) => asset.id === clip.assetId)?.name ?? 'Clip'} · ${formatTime(clip.duration)}`}>{clip.text ?? assets.find((asset) => asset.id === clip.assetId)?.name ?? 'Clip'}</button>)}</div>)}<div className="oc-editor__playhead" style={{ left: `${playhead * 36 * zoom}px` }} />{editPoints(clips).map((point) => <div key={point} className="oc-editor__edit-mark" style={{ left: `${point * 36 * zoom}px` }} />)}</div></div></section>
   </main>
+}
+
+const VISUAL_FIELDS: readonly { key: keyof VisualSettings; label: string; max: number; step: number; unit: string }[] = [
+  { key: 'brightness', label: 'Brightness', max: 200, step: 1, unit: '%' },
+  { key: 'contrast', label: 'Contrast', max: 200, step: 1, unit: '%' },
+  { key: 'saturation', label: 'Saturation', max: 200, step: 1, unit: '%' },
+  { key: 'opacity', label: 'Opacity', max: 100, step: 1, unit: '%' },
+  { key: 'fadeIn', label: 'Fade in', max: 0, step: 0.1, unit: 's' },
+  { key: 'fadeOut', label: 'Fade out', max: 0, step: 0.1, unit: 's' },
+]
+
+function VisualInspector({ clip, onChange }: { clip: Clip; onChange: (key: keyof VisualSettings, value: number) => void }): ReactElement {
+  const settings = visualSettings(clip)
+  return <fieldset className="oc-editor__visual-controls"><legend>Visual</legend>
+    {VISUAL_FIELDS.map((field) => <label key={field.key}>{field.label}
+      <span><input type="number" min="0" max={field.max || clip.duration} step={field.step} value={settings[field.key]} onChange={(event) => onChange(field.key, Number(event.target.value))} />{field.unit}</span>
+    </label>)}
+    <p>Overlapping clips show through during fades.</p>
+  </fieldset>
 }

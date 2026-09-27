@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { activeClipAt, canPlaceOnTrack, sourceTimeAt, splitClip, stepToEditPoint, timelineEnd, titlesAt, trimClip, visibleAssets, type Asset, type Clip } from './model'
+import { activeClipAt, canPlaceOnTrack, sourceTimeAt, splitClip, stepToEditPoint, timelineEnd, titlesAt, trimClip, visibleAssets, visualLayersAt, visualSettings, type Asset, type Clip } from './model'
 import { supportedWebMType, validateExport } from './export'
 
 const video: Asset = { id: 'v', name: 'Scene A.mp4', kind: 'video', url: '', byteLength: 100, duration: 12 }
@@ -59,5 +59,25 @@ describe('editor model', () => {
     expect(supportedWebMType((type) => type === 'video/webm;codecs=vp8,opus')).toBe('video/webm;codecs=vp8,opus')
     expect(supportedWebMType((type) => type === 'video/webm;codecs=vp8', false)).toBe('video/webm;codecs=vp8')
     expect(supportedWebMType(() => false)).toBeNull()
+  })
+  it('reveals the prior visual clip during an overlapping fade', () => {
+    const upper: Clip = { ...clip, id: 'upper', start: 4, duration: 4, visual: { brightness: 125, contrast: 90, saturation: 110, opacity: 80, fadeIn: 2, fadeOut: 1 } }
+    const layers = visualLayersAt([clip, upper], 5)
+    expect(layers.map((layer) => layer.clip.id)).toEqual(['c', 'upper'])
+    expect(layers[0].opacity).toBe(1)
+    expect(layers[1].opacity).toBe(0.4)
+    expect(layers[0].audioGain).toBeCloseTo(0.6)
+    expect(layers[1].audioGain).toBeCloseTo(0.4)
+    expect(layers[1].filter).toBe('brightness(125%) contrast(90%) saturate(110%)')
+    expect(visualLayersAt([clip, upper], 7.5)[1].opacity).toBeCloseTo(0.4)
+  })
+  it('clamps visual controls and keeps outer fades when splitting and trimming', () => {
+    const adjusted: Clip = { ...clip, visual: { brightness: 300, contrast: -5, saturation: 100, opacity: 100, fadeIn: 2, fadeOut: 3 } }
+    expect(visualSettings(adjusted)).toMatchObject({ brightness: 200, contrast: 0 })
+    const [left, right] = splitClip([adjusted], 'c', 6, 'right')
+    expect(left.visual).toMatchObject({ fadeIn: 2, fadeOut: 0 })
+    expect(right.visual).toMatchObject({ fadeIn: 0, fadeOut: 3 })
+    expect(trimClip(adjusted, 'left', 3).visual?.fadeIn).toBe(1)
+    expect(trimClip(adjusted, 'right', 9).visual?.fadeOut).toBe(2)
   })
 })

@@ -5,13 +5,20 @@ import { MediaLibrary, DEFAULT_MEDIA_LIBRARY_FILTERS, type MediaLibraryFilters }
 import { EditPointNavigation } from '../components/editor/edit-point-navigation'
 import { EditorWorkspace } from '../components/editor/editor-workspace'
 import { exportTimeline } from '../editor/export'
-import { activeClipAt, canPlaceOnTrack, editPoints, sourceTimeAt, splitClip, stepToEditPoint, timelineEnd, titlesAt, trimClip, visibleAssets, visualLayersAt, visualSettings, type Asset, type Clip, type VisualSettings } from '../editor/model'
+import { activeClipAt, canPlaceOnTrack, editPoints, playheadForSelectedClip, sourceTimeAt, splitClip, stepToEditPoint, timelineEnd, titlesAt, trimClip, visibleAssets, visualLayersAt, visualSettings, type Asset, type Clip, type VisualSettings } from '../editor/model'
 import '../editor/editor.css'
 
 export const Route = createFileRoute('/editor')({ component: Editor })
 const newId = (): string => crypto.randomUUID()
 const formatTime = (seconds: number): string => `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toFixed(1).padStart(4, '0')}`
 const bytes = (size: number): string => size < 1024 * 1024 ? `${Math.round(size / 1024)} KB` : `${(size / 1024 / 1024).toFixed(1)} MB`
+const PRESETS = [
+  { id: 'dark-zinc', label: 'Dark Zinc' },
+  { id: 'daylight-glass', label: 'Command Desk' },
+  { id: 'midnight-neon', label: 'Midnight Neon' },
+  { id: 'obsidian-pro', label: 'Graphite Pro' },
+] as const
+type EditorPreset = (typeof PRESETS)[number]['id']
 
 async function readFile(file: File): Promise<Asset> {
   const kind = file.type.startsWith('video/') ? 'video' : file.type.startsWith('audio/') ? 'audio' : 'image'
@@ -33,10 +40,14 @@ async function readFile(file: File): Promise<Asset> {
 
 function Editor(): ReactElement {
   const [theme, setTheme] = useState<'light' | 'dark'>('dark')
+  const [preset, setPreset] = useState<EditorPreset>('obsidian-pro')
   useEffect(() => {
     try {
       const saved = window.localStorage.getItem('opencut-editor-theme')
       setTheme(saved === 'light' || saved === 'dark' ? saved : window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+      const savedPreset = window.localStorage.getItem('opencut-editor-preset')
+      const validPreset = PRESETS.find((item) => item.id === savedPreset)
+      if (validPreset) setPreset(validPreset.id)
     } catch {
       setTheme(window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
     }
@@ -45,6 +56,10 @@ function Editor(): ReactElement {
     const next = theme === 'dark' ? 'light' : 'dark'
     setTheme(next)
     try { window.localStorage.setItem('opencut-editor-theme', next) } catch { /* Browser storage may be unavailable. */ }
+  }
+  const changePreset = (next: EditorPreset): void => {
+    setPreset(next)
+    try { window.localStorage.setItem('opencut-editor-preset', next) } catch { /* Browser storage may be unavailable. */ }
   }
   const [assets, setAssets] = useState<Asset[]>([])
   const [clips, setClips] = useState<Clip[]>([])
@@ -125,6 +140,7 @@ function Editor(): ReactElement {
     if (!canPlaceOnTrack(asset.kind, track)) return
     const clip: Clip = { id: newId(), assetId, start: Math.max(0, at), sourceStart: 0, duration: asset.duration, track }
     setClips((current) => [...current, clip])
+    setSelectedAssetId(assetId)
     setSelectedClipId(clip.id)
   }
   const seek = (time: number): void => {
@@ -222,11 +238,11 @@ function Editor(): ReactElement {
     else if (assetId) placeAsset(assetId, at, track)
   }
 
-  return <EditorWorkspace mode="web" theme={theme}
-    header={<header className="oc-editor__header"><strong>OpenCut</strong><span>Untitled project</span><span className="oc-editor__header-spacer" /><button type="button" onClick={toggleTheme} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`} title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}>{theme === 'dark' ? '☀' : '☾'}</button>{exportError && <span className="oc-editor__export-error" role="alert">{exportError}</span>}{exporting ? <><span role="status">Exporting {Math.round(exportProgress * 100)}% · keep this tab open</span><button type="button" onClick={() => exportController.current?.abort()}>Cancel</button></> : <button type="button" onClick={() => { void onExport() }} disabled={clips.length === 0} title="Record the timeline locally to WebM at 1280 × 720">Export WebM</button>}</header>}
+  return <EditorWorkspace mode="web" theme={theme} preset={preset}
+    header={<header className="oc-editor__header"><strong>OpenCut</strong><span>Untitled project</span><span className="oc-editor__header-spacer" /><select className="oc-editor-theme-picker" aria-label="Editor theme preset" value={preset} onChange={(event) => changePreset(event.currentTarget.value as EditorPreset)}>{PRESETS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select><button type="button" onClick={toggleTheme} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`} title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}>{theme === 'dark' ? '☀' : '☾'}</button>{exportError && <span className="oc-editor__export-error" role="alert">{exportError}</span>}{exporting ? <><span role="status">Exporting {Math.round(exportProgress * 100)}% · keep this tab open</span><button type="button" onClick={() => exportController.current?.abort()}>Cancel</button></> : <button type="button" onClick={() => { void onExport() }} disabled={clips.length === 0} title="Record the timeline locally to WebM at 1280 × 720">Export WebM</button>}</header>}
     auxiliary={<input ref={fileInput} type="file" multiple hidden accept={importKind.current === 'video' ? 'video/*' : importKind.current === 'audio' ? 'audio/*' : importKind.current === 'image' ? 'image/*' : 'video/*,audio/*,image/*'} onChange={(event) => { void onFiles(event) }} />}
     left={<><EditorToolRail activeTabId={activeTab} onActiveTabChange={setActiveTab} /><div className="editor-tool-panel" id="editor-tool-panel" role="tabpanel" aria-labelledby={`editor-tool-tab-${activeTab}`}>
-        {activeTab === 'media' || activeTab === 'audio' ? <MediaLibrary mode={activeTab} hasProject busy={false} availableCount={activeTab === 'audio' ? assets.filter((asset) => asset.kind === 'audio').length : assets.length} assets={mediaItems} filters={filters} selectedAssetId={selectedAssetId} onFiltersChange={setFilters} onImport={importFiles} onSelect={setSelectedAssetId} onPlace={() => selectedAssetId && placeAsset(selectedAssetId)} onAssetDragStart={(event, assetId) => { event.dataTransfer.setData('text/plain', assetId); event.dataTransfer.effectAllowed = 'copy' }} />
+        {activeTab === 'media' || activeTab === 'audio' ? <MediaLibrary mode={activeTab} hasProject busy={false} availableCount={activeTab === 'audio' ? assets.filter((asset) => asset.kind === 'audio').length : assets.length} assets={mediaItems} filters={filters} selectedAssetId={selectedAssetId} onFiltersChange={setFilters} onImport={importFiles} onSelect={(assetId) => { setSelectedAssetId(assetId); setSelectedClipId(null) }} onPlace={() => selectedAssetId && placeAsset(selectedAssetId)} onActivateAsset={placeAsset} onAssetDragStart={(event, assetId) => { event.dataTransfer.setData('text/plain', assetId); event.dataTransfer.effectAllowed = 'copy' }} />
           : activeTab === 'text' ? <div className="oc-editor__pane"><h2>Text</h2><button type="button" onClick={addText}>+ Add text at playhead</button></div>
           : <div className="oc-editor__pane"><h2>Project</h2><p>Media: {assets.length}</p><p>Timeline clips: {clips.length}</p><button type="button" onClick={() => importFiles()}>Import media</button></div>}
       </div></>}
@@ -249,7 +265,7 @@ function Editor(): ReactElement {
         <button type="button" onClick={() => setClips((current) => current.map((clip) => clip.id === selectedClip.id ? trimClip(clip, 'left', playhead) : clip))}>Trim left to playhead</button>
         <button type="button" onClick={() => setClips((current) => current.map((clip) => clip.id === selectedClip.id ? trimClip(clip, 'right', playhead) : clip))}>Trim right to playhead</button>
       </> : selectedAsset ? <><strong>{selectedAsset.name}</strong><span>{selectedAsset.kind} · {bytes(selectedAsset.byteLength)}</span><span>{formatTime(selectedAsset.duration)}</span></> : <p>Select a clip or media item.</p>}</>}
-    timeline={<><div className="oc-editor__timeline-toolbar"><button type="button" onClick={split} disabled={!selectedClip || playhead <= selectedClip.start || playhead >= selectedClip.start + selectedClip.duration}>Split</button><button type="button" onClick={remove} disabled={!selectedClip}>Delete</button><EditPointNavigation disabled={clips.length === 0} onPrevious={() => seek(stepToEditPoint(clips, playhead, 'previous'))} onNext={() => seek(stepToEditPoint(clips, playhead, 'next'))} /><button type="button" aria-pressed={snapping} title="Snap to edit points" onClick={() => setSnapping((value) => !value)}>{snapping ? 'Snap on' : 'Snap off'}</button><span className="oc-editor__toolbar-spacer" /><button type="button" onClick={() => setZoom((value) => Math.max(0.5, value / 1.25))}>−</button><span>{Math.round(zoom * 100)}%</span><button type="button" onClick={() => setZoom((value) => Math.min(5, value * 1.25))}>+</button></div><div className="oc-editor__timeline-scroll"><div className="oc-editor__track-labels"><div>Time</div><div>Text</div><div>Video</div><div>Audio</div></div><div className="oc-editor__timeline-content" style={{ width: `${duration * 36 * zoom}px` }}><div className="oc-editor__ruler" onClick={(event) => { const rect = event.currentTarget.getBoundingClientRect(); seek((event.clientX - rect.left) / (36 * zoom)) }}>{Array.from({ length: Math.ceil(duration / 5) + 1 }, (_, i) => <span key={i} style={{ left: `${i * 5 * 36 * zoom}px` }}>{i * 5}s</span>)}</div>{(['text', 'video', 'audio'] as const).map((track) => <div key={track} className="oc-editor__track" onDragOver={(event) => event.preventDefault()} onDrop={(event) => onTrackDrop(event, track)}>{clips.filter((clip) => clip.track === track).map((clip) => <button key={clip.id} type="button" draggable onDragStart={(event) => { event.dataTransfer.setData('application/x-opencut-clip', clip.id); event.dataTransfer.effectAllowed = 'move' }} className={`oc-editor__clip oc-editor__clip--${track}${selectedClipId === clip.id ? ' oc-editor__clip--selected' : ''}`} style={{ left: `${clip.start * 36 * zoom}px`, width: `${Math.max(clip.duration * 36 * zoom, 28)}px` }} onClick={() => { setSelectedClipId(clip.id); seek(clip.start) }} title={`${clip.text ?? assets.find((asset) => asset.id === clip.assetId)?.name ?? 'Clip'} · ${formatTime(clip.duration)}`}>{clip.text ?? assets.find((asset) => asset.id === clip.assetId)?.name ?? 'Clip'}</button>)}</div>)}<div className="oc-editor__playhead" style={{ left: `${playhead * 36 * zoom}px` }} />{editPoints(clips).map((point) => <div key={point} className="oc-editor__edit-mark" style={{ left: `${point * 36 * zoom}px` }} />)}</div></div></>}
+    timeline={<><div className="oc-editor__timeline-toolbar"><button type="button" onClick={split} disabled={!selectedClip || playhead <= selectedClip.start || playhead >= selectedClip.start + selectedClip.duration}>Split</button><button type="button" onClick={remove} disabled={!selectedClip}>Delete</button><EditPointNavigation disabled={clips.length === 0} onPrevious={() => seek(stepToEditPoint(clips, playhead, 'previous'))} onNext={() => seek(stepToEditPoint(clips, playhead, 'next'))} /><button type="button" aria-pressed={snapping} title="Snap to edit points" onClick={() => setSnapping((value) => !value)}>{snapping ? 'Snap on' : 'Snap off'}</button><span className="oc-editor__toolbar-spacer" /><button type="button" onClick={() => setZoom((value) => Math.max(0.5, value / 1.25))}>−</button><span>{Math.round(zoom * 100)}%</span><button type="button" onClick={() => setZoom((value) => Math.min(5, value * 1.25))}>+</button></div><div className="oc-editor__timeline-scroll"><div className="oc-editor__track-labels"><div>Time</div><div>Text</div><div>Video</div><div>Audio</div></div><div className="oc-editor__timeline-content" style={{ width: `${duration * 36 * zoom}px` }}><div className="oc-editor__ruler" onClick={(event) => { const rect = event.currentTarget.getBoundingClientRect(); seek((event.clientX - rect.left) / (36 * zoom)) }}>{Array.from({ length: Math.ceil(duration / 5) + 1 }, (_, i) => <span key={i} style={{ left: `${i * 5 * 36 * zoom}px` }}>{i * 5}s</span>)}</div>{(['text', 'video', 'audio'] as const).map((track) => <div key={track} className="oc-editor__track" onDragOver={(event) => event.preventDefault()} onDrop={(event) => onTrackDrop(event, track)}>{clips.filter((clip) => clip.track === track).map((clip) => <button key={clip.id} type="button" draggable onDragStart={(event) => { event.dataTransfer.setData('application/x-opencut-clip', clip.id); event.dataTransfer.effectAllowed = 'move' }} className={`oc-editor__clip oc-editor__clip--${track}${selectedClipId === clip.id ? ' oc-editor__clip--selected' : ''}`} style={{ left: `${clip.start * 36 * zoom}px`, width: `${Math.max(clip.duration * 36 * zoom, 28)}px` }} onClick={() => { setSelectedClipId(clip.id); seek(playheadForSelectedClip(clip, playhead)) }} title={`${clip.text ?? assets.find((asset) => asset.id === clip.assetId)?.name ?? 'Clip'} · ${formatTime(clip.duration)}`}>{clip.text ?? assets.find((asset) => asset.id === clip.assetId)?.name ?? 'Clip'}</button>)}</div>)}<div className="oc-editor__playhead" style={{ left: `${playhead * 36 * zoom}px` }} />{editPoints(clips).map((point) => <div key={point} className="oc-editor__edit-mark" style={{ left: `${point * 36 * zoom}px` }} />)}</div></div></>}
   />
 }
 

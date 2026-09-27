@@ -20,6 +20,11 @@ export type Clip = {
   readonly visual?: VisualSettings
 }
 
+/** Keep the current frame when it belongs to the selected clip; otherwise reveal its first frame. */
+export function playheadForSelectedClip(clip: Clip, playhead: number): number {
+  return playhead >= clip.start && playhead < clip.start + clip.duration ? playhead : clip.start
+}
+
 export type VisualSettings = {
   readonly brightness: number
   readonly contrast: number

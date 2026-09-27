@@ -20,13 +20,17 @@
 .oc-editor__pane button, .oc-editor__inspector button, .oc-editor__transport button, .oc-editor__timeline-toolbar button, .asset-bin button { border: 1px solid var(--border); border-radius: 5px; background: #2a303a; color: var(--text-strong); padding: 5px 8px; }
 .oc-editor__preview { min-width: 0; min-height: 0; display: grid; grid-template-rows: minmax(0,1fr) 40px; background: var(--card); border: 1px solid var(--border); border-radius: 8px; }
 .oc-editor__stage { position: relative; min-height: 0; display: grid; place-items: center; background: #080a0d; overflow: hidden; }
-.oc-editor__stage video,.oc-editor__stage img { width: 100%; height: 100%; object-fit: contain; }
+.oc-editor__stage video,.oc-editor__stage img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
 .oc-editor__stage-empty { color: var(--text-weaker); text-align: center; padding: 16px; }
 .oc-editor__title { position: absolute; left: 10%; right: 10%; top: 40%; text-align: center; font-size: clamp(24px, 3vw, 54px); font-weight: 700; text-shadow: 0 3px 12px #000; }
 .oc-editor__transport { display: flex; align-items: center; justify-content: center; gap: 20px; }
 .oc-editor__inspector { display: flex; flex-direction: column; gap: 12px; min-width: 0; overflow: auto; padding: 12px; background: var(--card); border: 1px solid var(--border); border-radius: 8px; }
 .oc-editor__inspector label { display: grid; gap: 4px; color: var(--text-weak); }
 .oc-editor__inspector input { min-width: 0; width: 100%; padding: 5px; border: 1px solid var(--border); border-radius: 4px; color: var(--text-strong); background: var(--surface-inset); }
+.oc-editor__visual-controls { display: grid; gap: 8px; min-width: 0; margin: 0; padding: 8px; border: 1px solid var(--border); border-radius: 5px; }
+.oc-editor__visual-controls legend { font-weight: 600; }
+.oc-editor__visual-controls label span { display: flex; align-items: center; gap: 4px; }
+.oc-editor__visual-controls p { margin: 0; color: var(--text-weaker); font-size: 11px; }
 .oc-editor__timeline { min-height: 0; margin: 0 4px 4px; background: var(--card); border: 1px solid var(--border); border-radius: 8px; display: grid; grid-template-rows: 40px minmax(0,1fr); }
 .oc-editor__timeline-toolbar { display: flex; align-items: center; gap: 5px; padding: 4px 8px; border-bottom: 1px solid var(--border); }
 .edit-point-navigation { display: flex; gap: 3px; }
@@ -73,5 +77,5 @@
 .asset-row__duration { grid-column: 2; color: var(--text-weaker); font-size: 10px; }
 .asset-bin__dropzone { min-height: 110px; display: grid; place-content: center; gap: 5px; border-style: dashed !important; text-align: center; font-size: 11px; }
 .empty-slate { color: var(--text-weaker); font-size: 12px; padding: 16px; }
-@media (max-width: 900px) { .oc-editor__main { grid-template-columns: minmax(220px, 38%) minmax(0,1fr); }.oc-editor__inspector { display: none; } }
-@media (max-width: 600px) { .oc-editor { grid-template-rows: 42px minmax(0,1fr) 230px; }.oc-editor__main { grid-template-columns: 1fr; grid-template-rows: 210px minmax(0,1fr); }.oc-editor__left { grid-row: 1; }.oc-editor__preview { grid-row: 2; } }
+@media (max-width: 900px) { .oc-editor__main { grid-template-columns: minmax(220px, 38%) minmax(0,1fr); grid-template-rows: minmax(0,1fr) 155px; }.oc-editor__inspector { grid-column: 1 / -1; } }
+@media (max-width: 600px) { .oc-editor { grid-template-rows: 42px minmax(0,1fr) 230px; }.oc-editor__main { grid-template-columns: 1fr; grid-template-rows: 130px minmax(0,1fr) 145px; }.oc-editor__left { grid-row: 1; }.oc-editor__preview { grid-row: 2; }.oc-editor__inspector { grid-row: 3; } }

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { exportTimeline } from './export'
-import type { Asset, Clip } from './model'
+import { DEFAULT_VISUAL_SETTINGS, type Asset, type Clip } from './model'
 
 const image: Asset = { id: 'still', name: 'still.png', kind: 'image', url: 'blob:still', byteLength: 10, duration: 0.08 }
 const clip: Clip = { id: 'still-clip', assetId: image.id, track: 'video', start: 0, sourceStart: 0, duration: 0.08 }
@@ -11,10 +11,12 @@ afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
 describe('browser export', () => {
   it('records a local WebM containing the active still and title', async () => {
-    const drawImage = vi.fn()
+    const painted: Array<{ alpha: number; filter: string }> = []
+    const context = { fillRect: vi.fn(), fillText: vi.fn(), globalAlpha: 1, filter: 'none', drawImage: vi.fn(() => painted.push({ alpha: context.globalAlpha, filter: context.filter })) }
     const fillText = vi.fn()
     const stopTrack = vi.fn()
-    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({ fillRect: vi.fn(), drawImage, fillText } as unknown as CanvasRenderingContext2D)
+    context.fillText = fillText
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(context as unknown as CanvasRenderingContext2D)
     Object.defineProperty(HTMLCanvasElement.prototype, 'captureStream', { configurable: true, value: () => ({ getTracks: () => [{ stop: stopTrack }] }) })
     Object.defineProperty(HTMLImageElement.prototype, 'decode', { configurable: true, value: () => Promise.resolve() })
     Object.defineProperty(HTMLImageElement.prototype, 'naturalWidth', { configurable: true, value: 100 })
@@ -42,10 +44,13 @@ describe('browser export', () => {
     vi.stubGlobal('MediaRecorder', Recorder)
 
     const onProgress = vi.fn()
-    const blob = await exportTimeline({ assets: [image], clips: [clip, title], signal: new AbortController().signal, onProgress })
+    const upper: Asset = { ...image, id: 'upper', url: 'blob:upper' }
+    const upperClip: Clip = { ...clip, id: 'upper-clip', assetId: upper.id, visual: { ...DEFAULT_VISUAL_SETTINGS, brightness: 125, fadeIn: 0.06 } }
+    const blob = await exportTimeline({ assets: [image, upper], clips: [clip, upperClip, title], signal: new AbortController().signal, onProgress })
     expect(blob.type).toBe('video/webm')
     expect(await blob.text()).toBe('webm')
-    expect(drawImage).toHaveBeenCalled()
+    expect(context.drawImage).toHaveBeenCalled()
+    expect(painted.some((frame) => frame.alpha > 0 && frame.alpha < 1 && frame.filter.includes('brightness(125%)'))).toBe(true)
     expect(fillText).toHaveBeenCalledWith('Opening', 640, 324, 1024)
     expect(onProgress).toHaveBeenLastCalledWith(1)
     expect(stopTrack).toHaveBeenCalledOnce()
@@ -75,7 +80,8 @@ describe('browser export', () => {
       resume = vi.fn().mockResolvedValue(undefined)
       close = close
       createMediaStreamDestination = () => ({ stream: { getAudioTracks: () => ['mixed-audio'] } })
-      createMediaElementSource = () => ({ connect })
+      createGain = () => ({ gain: { value: 0 }, connect })
+      createMediaElementSource = () => ({ connect: (gain: unknown) => { connect(gain); return gain } })
     }
     vi.stubGlobal('AudioContext', AudioContextMock)
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => window.setTimeout(() => callback(performance.now()), 16))
@@ -106,7 +112,7 @@ describe('browser export', () => {
     const blob = await exportTimeline({ assets: [video, audio], clips: [videoClip, audioClip], signal: new AbortController().signal, onProgress: vi.fn() })
     expect(blob.type).toBe('video/webm;codecs=vp8,opus')
     expect(addTrack).toHaveBeenCalledWith('mixed-audio')
-    expect(connect).toHaveBeenCalledTimes(2)
+    expect(connect).toHaveBeenCalledTimes(4)
     expect(play).toHaveBeenCalled()
     expect(drawImage).toHaveBeenCalled()
     expect(close).toHaveBeenCalledOnce()

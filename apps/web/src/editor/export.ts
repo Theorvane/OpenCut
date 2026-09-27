@@ -1,4 +1,4 @@
-import { activeClipAt, sourceTimeAt, timelineEnd, titlesAt, type Asset, type Clip } from './model'
+import { activeClipAt, sourceTimeAt, timelineEnd, titlesAt, visualLayersAt, type Asset, type Clip } from './model'
 
 const WIDTH = 1280
 const HEIGHT = 720
@@ -122,6 +122,7 @@ export async function exportTimeline(options: {
   if (!context) throw new Error('Could not create the export canvas.')
   const assetById = new Map(assets.map((asset) => [asset.id, asset]))
   const mediaByClip = new Map<string, HTMLMediaElement>()
+  const gainByClip = new Map<string, GainNode>()
   const imageByAsset = new Map<string, HTMLImageElement>()
   let audioContext: AudioContext | null = null
   let stream: MediaStream | null = null
@@ -153,26 +154,56 @@ export async function exportTimeline(options: {
     stream = canvas.captureStream(FRAME_RATE)
     if (audioContext) {
       const destination = audioContext.createMediaStreamDestination()
-      mediaByClip.forEach((element) => audioContext?.createMediaElementSource(element).connect(destination))
+      mediaByClip.forEach((element, id) => {
+        const gain = audioContext?.createGain()
+        if (!gain) return
+        gain.gain.value = 0
+        audioContext?.createMediaElementSource(element).connect(gain).connect(destination)
+        gainByClip.set(id, gain)
+      })
       destination.stream.getAudioTracks().forEach((track) => stream?.addTrack(track))
     }
 
-    let activeVideoId: string | null = null
+    let activeVisualIds = new Set<string>()
     let activeAudioId: string | null = null
     let recordFailure: Error | null = null
     let stopRecording: (() => void) | null = null
-    const syncTrack = (track: 'video' | 'audio', time: number): void => {
-      const clip = activeClipAt(clips, track, time)
+    const syncVisuals = (time: number): void => {
+      const layers = visualLayersAt(clips, time)
+      const nextIds = new Set(layers.map((layer) => layer.clip.id))
+      for (const id of activeVisualIds) if (!nextIds.has(id)) mediaByClip.get(id)?.pause()
+      activeVisualIds = nextIds
+      for (const layer of layers) {
+        const element = mediaByClip.get(layer.clip.id)
+        if (!element) continue
+        const gain = gainByClip.get(layer.clip.id)
+        if (gain) gain.gain.value = layer.audioGain
+        const desired = Math.max(0, sourceTimeAt(layer.clip, time))
+        if (Math.abs(element.currentTime - desired) > 0.35) element.currentTime = desired
+        if (element.paused) void element.play().catch((error: unknown) => {
+          if (!activeVisualIds.has(layer.clip.id) || (error instanceof DOMException && error.name === 'AbortError')) return
+          recordFailure = error instanceof Error ? error : new Error('Could not play video during export.')
+          stopRecording?.()
+        })
+      }
+      for (const [id, gain] of gainByClip) if (!nextIds.has(id) && clips.find((clip) => clip.id === id)?.track === 'video') gain.gain.value = 0
+    }
+    const syncAudio = (time: number): void => {
+      const clip = activeClipAt(clips, 'audio', time)
       const element = clip ? mediaByClip.get(clip.id) : undefined
-      const previousId = track === 'video' ? activeVideoId : activeAudioId
-      if (previousId && previousId !== clip?.id) mediaByClip.get(previousId)?.pause()
-      if (track === 'video') activeVideoId = clip?.id ?? null
-      else activeAudioId = clip?.id ?? null
+      if (activeAudioId && activeAudioId !== clip?.id) {
+        mediaByClip.get(activeAudioId)?.pause()
+        const previousGain = gainByClip.get(activeAudioId)
+        if (previousGain) previousGain.gain.value = 0
+      }
+      activeAudioId = clip?.id ?? null
       if (!clip || !element) return
+      const gain = gainByClip.get(clip.id)
+      if (gain) gain.gain.value = 1
       const desired = Math.max(0, sourceTimeAt(clip, time))
-      if (previousId !== clip.id || Math.abs(element.currentTime - desired) > 0.35) element.currentTime = desired
+      if (Math.abs(element.currentTime - desired) > 0.35) element.currentTime = desired
       if (element.paused) void element.play().catch((error: unknown) => {
-        if ((track === 'video' ? activeVideoId : activeAudioId) !== clip.id || (error instanceof DOMException && error.name === 'AbortError')) return
+        if (activeAudioId !== clip.id || (error instanceof DOMException && error.name === 'AbortError')) return
         recordFailure = error instanceof Error ? error : new Error('Could not play media during export.')
         stopRecording?.()
       })
@@ -180,23 +211,28 @@ export async function exportTimeline(options: {
     const drawFrame = (time: number): void => {
       context.fillStyle = '#080a0d'
       context.fillRect(0, 0, WIDTH, HEIGHT)
-      const videoClip = activeClipAt(clips, 'video', time)
-      const asset = videoClip ? assetById.get(videoClip.assetId) : undefined
-      if (asset?.kind === 'image') {
-        const image = imageByAsset.get(asset.id)
-        if (image) drawContained(context, image, image.naturalWidth, image.naturalHeight)
-      } else if (asset?.kind === 'video') {
-        const element = videoClip && mediaByClip.get(videoClip.id)
-        if (element instanceof HTMLVideoElement && element.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-          drawContained(context, element, element.videoWidth, element.videoHeight)
+      for (const layer of visualLayersAt(clips, time)) {
+        const asset = assetById.get(layer.clip.assetId)
+        context.globalAlpha = layer.opacity
+        context.filter = layer.filter
+        if (asset?.kind === 'image') {
+          const image = imageByAsset.get(asset.id)
+          if (image) drawContained(context, image, image.naturalWidth, image.naturalHeight)
+        } else if (asset?.kind === 'video') {
+          const element = mediaByClip.get(layer.clip.id)
+          if (element instanceof HTMLVideoElement && element.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+            drawContained(context, element, element.videoWidth, element.videoHeight)
+          }
         }
       }
+      context.globalAlpha = 1
+      context.filter = 'none'
       drawTitles(context, clips, time)
     }
 
     const duration = timelineEnd(clips)
-    syncTrack('video', 0)
-    syncTrack('audio', 0)
+    syncVisuals(0)
+    syncAudio(0)
     drawFrame(0)
     const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 5_000_000 })
     const blob = await new Promise<Blob>((resolve, reject) => {
@@ -221,8 +257,8 @@ export async function exportTimeline(options: {
           if (recorder.state === 'inactive') return
           try {
             const time = Math.min(duration, (now - startedAt) / 1000)
-            syncTrack('video', time)
-            syncTrack('audio', time)
+            syncVisuals(time)
+            syncAudio(time)
             drawFrame(time)
             onProgress(Math.min(1, time / duration))
             if (time < duration) frame = requestAnimationFrame(tick)

@@ -18,6 +18,8 @@ describe('editor model', () => {
   it('never extends a clip or moves the source before zero while trimming', () => {
     expect(trimClip(clip, 'left', 0)).toEqual(clip)
     expect(trimClip(clip, 'right', 50)).toEqual(clip)
+    expect(trimClip(clip, 'right', 1)).toEqual(clip)
+    expect(trimClip(clip, 'right', 5)).toEqual({ ...clip, duration: 3 })
   })
   it('navigates across starts and ends of overlapping clips', () => {
     const overlapping = { ...clip, id: 'b', start: 4, duration: 3 }

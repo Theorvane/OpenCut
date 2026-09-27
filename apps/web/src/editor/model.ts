@@ -40,6 +40,18 @@ export function timelineEnd(clips: readonly Clip[]): number {
   return Math.max(0, ...clips.map((clip) => clip.start + clip.duration))
 }
 
+export function activeClipAt(clips: readonly Clip[], track: Clip['track'], time: number): Clip | null {
+  return [...clips].reverse().find((clip) => clip.track === track && time >= clip.start && time < clip.start + clip.duration) ?? null
+}
+
+export function titlesAt(clips: readonly Clip[], time: number): Clip[] {
+  return clips.filter((clip) => clip.track === 'text' && time >= clip.start && time < clip.start + clip.duration)
+}
+
+export function sourceTimeAt(clip: Clip, time: number): number {
+  return clip.sourceStart + time - clip.start
+}
+
 export function editPoints(clips: readonly Clip[]): number[] {
   return [...new Set([0, ...clips.flatMap((clip) => [clip.start, clip.start + clip.duration])])].sort((a, b) => a - b)
 }
